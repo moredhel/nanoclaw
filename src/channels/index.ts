@@ -12,3 +12,4 @@ import './gmail.js';
 // telegram
 
 // whatsapp
+import './whatsapp.js';
