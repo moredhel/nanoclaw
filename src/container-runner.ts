@@ -5,6 +5,7 @@
  */
 import { ChildProcess, execSync, spawn } from 'child_process';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 
 import { OneCLI } from '@onecli-sh/sdk';
@@ -324,6 +325,17 @@ function buildMounts(
   if (containerConfig.additionalMounts && containerConfig.additionalMounts.length > 0) {
     const validated = validateAdditionalMounts(containerConfig.additionalMounts, agentGroup.name);
     mounts.push(...validated);
+  }
+
+  // Google Calendar MCP credentials — mount if the directory exists so the
+  // google-calendar MCP server can persist and refresh OAuth tokens.
+  const calendarDir = path.join(os.homedir(), '.config', 'google-calendar-mcp');
+  if (fs.existsSync(calendarDir)) {
+    mounts.push({
+      hostPath: calendarDir,
+      containerPath: '/home/node/.config/google-calendar-mcp',
+      readonly: false, // MCP may need to refresh OAuth tokens
+    });
   }
 
   // Provider-contributed mounts (e.g. opencode-xdg)

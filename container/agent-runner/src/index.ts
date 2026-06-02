@@ -86,6 +86,25 @@ async function main(): Promise<void> {
     log(`Additional MCP server: ${name} (${serverConfig.command})`);
   }
 
+  // Google Calendar MCP — auto-wired when OAuth credentials are present.
+  // Shares the GCP OAuth app credentials with the Gmail MCP server.
+  // The credentials directory is mounted from ~/.config/google-calendar-mcp
+  // on the host by container-runner.ts.
+  const calendarCredsDir = '/home/node/.config/google-calendar-mcp';
+  const gmailOauthCreds = '/home/node/.gmail-mcp/gcp-oauth.keys.json';
+  if (
+    !mcpServers['google-calendar'] &&
+    fs.existsSync(calendarCredsDir) &&
+    fs.existsSync(gmailOauthCreds)
+  ) {
+    mcpServers['google-calendar'] = {
+      command: 'npx',
+      args: ['-y', '@cocal/google-calendar-mcp'],
+      env: { GOOGLE_OAUTH_CREDENTIALS: gmailOauthCreds },
+    };
+    log('Auto-wired Google Calendar MCP server');
+  }
+
   const provider = createProvider(providerName, {
     assistantName: config.assistantName || undefined,
     mcpServers,

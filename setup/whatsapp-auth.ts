@@ -43,8 +43,9 @@ import {
 } from '@whiskeysockets/baileys';
 import { emitStatus } from './status.js';
 
-const AUTH_DIR = path.join(process.cwd(), 'store', 'auth');
-const PAIRING_CODE_FILE = path.join(process.cwd(), 'store', 'pairing-code.txt');
+const isMonitor = process.argv.includes('--monitor');
+const AUTH_DIR = path.join(process.cwd(), 'store', isMonitor ? 'auth-monitor' : 'auth');
+const PAIRING_CODE_FILE = path.join(process.cwd(), 'store', isMonitor ? 'pairing-code-monitor.txt' : 'pairing-code.txt');
 const baileysLogger = pino({ level: 'silent' });
 
 // Baileys v6 bug: getPlatformId sends charCode (49) instead of enum value (1).

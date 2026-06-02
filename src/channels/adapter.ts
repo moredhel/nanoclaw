@@ -11,6 +11,13 @@ export interface ChannelSetup {
   onInbound(platformId: string, threadId: string | null, message: InboundMessage): void | Promise<void>;
 
   /**
+   * Called when the channel connection status changes.
+   * Adapters that support reconnection should fire this so the host can
+   * forward alerts to the operator (e.g. via notifyMain).
+   */
+  onStatusChange?(status: 'connected' | 'disconnected' | 'logged_out', channelName: string): void;
+
+  /**
    * Called by admin-transport adapters (CLI) that want to route a message to
    * an arbitrary channel/platform and optionally redirect replies elsewhere.
    * Regular chat adapters should use `onInbound`; `onInboundEvent` skips the

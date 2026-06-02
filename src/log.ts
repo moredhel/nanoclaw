@@ -1,6 +1,16 @@
 const LEVELS = { debug: 20, info: 30, warn: 40, error: 50, fatal: 60 } as const;
 type Level = keyof typeof LEVELS;
 
+type ErrorNotifier = (level: 'error' | 'fatal', msg: string, data: Record<string, unknown>) => void;
+
+let errorNotifier: ErrorNotifier | null = null;
+const rateLimitMap = new Map<string, number>();
+const RATE_LIMIT_MS = 60_000;
+
+export function setErrorNotifier(fn: ErrorNotifier): void {
+  errorNotifier = fn;
+}
+
 const COLORS: Record<Level, string> = {
   debug: '\x1b[34m',
   info: '\x1b[32m',
@@ -44,6 +54,15 @@ function emit(level: Level, msg: string, data?: Record<string, unknown>): void {
   const tag = `${COLORS[level]}${level.toUpperCase()}${level === 'fatal' ? FULL_RESET : RESET}`;
   const stream = LEVELS[level] >= LEVELS.warn ? process.stderr : process.stdout;
   stream.write(`[${ts()}] ${tag} ${MSG_COLOR}${msg}${RESET}${data ? formatData(data) : ''}\n`);
+
+  if (errorNotifier && (level === 'error' || level === 'fatal')) {
+    const key = `${level}:${msg}`;
+    const now = Date.now();
+    if (level === 'fatal' || (now - (rateLimitMap.get(key) ?? 0)) > RATE_LIMIT_MS) {
+      rateLimitMap.set(key, now);
+      try { errorNotifier(level, msg, data ?? {}); } catch { /* swallow — notifier must not crash the host */ }
+    }
+  }
 }
 
 export const log = {

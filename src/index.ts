@@ -16,7 +16,7 @@ import { ensureContainerRuntimeRunning, cleanupOrphans } from './container-runti
 import { startActiveDeliveryPoll, startSweepDeliveryPoll, setDeliveryAdapter, stopDeliveryPolls } from './delivery.js';
 import { startHostSweep, stopHostSweep } from './host-sweep.js';
 import { routeInbound } from './router.js';
-import { log } from './log.js';
+import { log, setErrorNotifier } from './log.js';
 
 // Response + shutdown registries live in response-registry.ts to break the
 // circular import cycle: src/index.ts imports src/modules/index.js for side
@@ -138,6 +138,14 @@ async function main(): Promise<void> {
           log.error('Failed to handle question response', { questionId, err });
         });
       },
+      onStatusChange(status, channelName) {
+        if (status === 'connected') return;
+        const text =
+          status === 'logged_out'
+            ? `🔴 ${channelName} logged out — credentials invalid, re-authentication required`
+            : `⚠️ ${channelName} disconnected — reconnecting`;
+        notifyMain(text).catch(() => {});
+      },
     };
   });
 
@@ -164,6 +172,36 @@ async function main(): Promise<void> {
     },
   };
   setDeliveryAdapter(deliveryAdapter);
+
+  // notifyMain: sends a text message to the operator via the main agent group's
+  // connected channel. Used for status alerts (channel disconnects, fatal errors).
+  function notifyMain(text: string): Promise<void> {
+    // Prefer the primary connected adapter — pick the first one that isConnected.
+    const adapters = [...new Set(['whatsapp', 'telegram', 'discord', 'slack', 'cli'])];
+    for (const channelType of adapters) {
+      const adapter = getChannelAdapter(channelType);
+      if (adapter?.isConnected()) {
+        // Find the main agent group's platformId for this channel type.
+        // For now, fire-and-forget to any connected channel via a synthetic
+        // inbound event so the delivery path handles routing.
+        return adapter.deliver('__notify__', null, { kind: 'chat', content: { text } }).then(() => {});
+      }
+    }
+    return Promise.resolve();
+  }
+
+  setErrorNotifier((level, msg, data) => {
+    const icon = level === 'fatal' ? '💀' : '🔴';
+    const err = data.err;
+    const errMsg =
+      err instanceof Error
+        ? err.message
+        : typeof err === 'object' && err !== null && 'message' in err
+          ? String((err as Record<string, unknown>).message)
+          : '';
+    const detail = errMsg ? `\n  ${errMsg}` : '';
+    notifyMain(`${icon} **${level.toUpperCase()}** ${msg}${detail}`).catch(() => {});
+  });
 
   // 5. Start delivery polls
   startActiveDeliveryPoll();

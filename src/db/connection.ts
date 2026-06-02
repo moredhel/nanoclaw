@@ -14,7 +14,10 @@ export function getDb(): Database.Database {
 export function initDb(dbPath: string): Database.Database {
   fs.mkdirSync(path.dirname(dbPath), { recursive: true });
   _db = new Database(dbPath);
-  _db.pragma('journal_mode = WAL');
+  // Use DELETE journal mode — WAL mode requires shared-memory (mmap) operations
+  // that are not supported on virtio 9p filesystems (e.g. NFS-style VM shares).
+  // DELETE is the SQLite default and works correctly on all filesystem types.
+  _db.pragma('journal_mode = DELETE');
   _db.pragma('foreign_keys = ON');
   log.info('Central DB initialized', { path: dbPath });
   return _db;
